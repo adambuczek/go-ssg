@@ -9,6 +9,16 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type FrontMatter struct {
+	Layout    string
+	Title     string
+	Date      string
+	Tags      []string
+	Published bool
+	Excerpt   string
+	Image     string
+}
+
 func main() {
 	file, err := readFile("test.md")
 	if err != nil {
@@ -43,10 +53,6 @@ func splitFrontMatter(file []byte) ([]byte, []byte, error) {
 }
 
 func parseFrontMatter(data []byte) {
-	type FrontMatter struct {
-		Title string
-		Date  string
-	}
 	var frontMatter FrontMatter
 	yaml.Unmarshal(data, &frontMatter)
 	log.Printf("%+v", frontMatter)
