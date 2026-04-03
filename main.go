@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/yuin/goldmark"
 	"gopkg.in/yaml.v3"
 )
 
@@ -25,12 +26,22 @@ func main() {
 		log.Fatal(err)
 	}
 
-	matter, content, err := splitFrontMatter(file)
+	frontMatterRaw, content, err := splitFrontMatter(file)
 	if err != nil {
 		log.Fatal(err)
 	}
 	log.Println(string(content))
-	parseFrontMatter(matter)
+	frontMatter, err := parseFrontMatter(frontMatterRaw)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("%+v", frontMatter)
+
+	html, err := renderMarkdown(content)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("%s", html)
 }
 
 func readFile(path string) ([]byte, error) {
@@ -52,8 +63,15 @@ func splitFrontMatter(file []byte) ([]byte, []byte, error) {
 	return matter, content, nil
 }
 
-func parseFrontMatter(data []byte) {
+func parseFrontMatter(data []byte) (FrontMatter, error) {
 	var frontMatter FrontMatter
-	yaml.Unmarshal(data, &frontMatter)
-	log.Printf("%+v", frontMatter)
+	err := yaml.Unmarshal(data, &frontMatter)
+	return frontMatter, err
+}
+
+func renderMarkdown(content []byte) ([]byte, error) {
+	md := goldmark.New()
+	var output bytes.Buffer
+	err := md.Convert(content, &output)
+	return output.Bytes(), err
 }
