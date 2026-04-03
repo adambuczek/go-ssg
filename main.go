@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"html/template"
 	"log"
 	"os"
 
@@ -10,7 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type FrontMatter struct {
+type Meta struct {
 	Layout    string
 	Title     string
 	Date      string
@@ -20,28 +21,45 @@ type FrontMatter struct {
 	Image     string
 }
 
+type Page struct {
+	Meta Meta
+	Body template.HTML
+}
+
 func main() {
 	file, err := readFile("test.md")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	frontMatterRaw, content, err := splitFrontMatter(file)
+	rawMeta, rawBody, err := splitMeta(file)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println(string(content))
-	frontMatter, err := parseFrontMatter(frontMatterRaw)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("%+v", frontMatter)
+	log.Println(string(rawBody))
 
-	html, err := renderMarkdown(content)
+	meta, err := parseMeta(rawMeta)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("%s", html)
+	log.Printf("%+v", meta)
+
+	body, err := renderBody(rawBody)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("%s", body)
+
+	page := Page{
+		Meta: meta,
+		Body: template.HTML(body),
+	}
+
+	renderedPage, err := renderPage(page, "./template.html")
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("%s", renderedPage)
 }
 
 func readFile(path string) ([]byte, error) {
@@ -49,29 +67,39 @@ func readFile(path string) ([]byte, error) {
 	return data, err
 }
 
-func splitFrontMatter(file []byte) ([]byte, []byte, error) {
+func splitMeta(file []byte) ([]byte, []byte, error) {
 	const frontMatterSplitter = "---\n"
 	prefix := []byte(frontMatterSplitter)
 	if !bytes.HasPrefix(file, prefix) {
 		return nil, file, fmt.Errorf("file does not start with front matter")
 	}
 	file = bytes.TrimPrefix(file, prefix)
-	matter, content, found := bytes.Cut(file, prefix)
+	meta, content, found := bytes.Cut(file, prefix)
 	if !found {
 		return nil, file, fmt.Errorf("front matter is not closed")
 	}
-	return matter, content, nil
+	return meta, content, nil
 }
 
-func parseFrontMatter(data []byte) (FrontMatter, error) {
-	var frontMatter FrontMatter
-	err := yaml.Unmarshal(data, &frontMatter)
-	return frontMatter, err
+func parseMeta(yamlData []byte) (Meta, error) {
+	var meta Meta
+	err := yaml.Unmarshal(yamlData, &meta)
+	return meta, err
 }
 
-func renderMarkdown(content []byte) ([]byte, error) {
-	md := goldmark.New()
+func renderBody(content []byte) ([]byte, error) {
 	var output bytes.Buffer
+	md := goldmark.New()
 	err := md.Convert(content, &output)
 	return output.Bytes(), err
+}
+
+func renderPage(page Page, templatePath string) ([]byte, error) {
+	var output bytes.Buffer
+	layout, err := template.ParseFiles(templatePath)
+	if err != nil {
+		return nil, err
+	}
+	layout.Execute(&output, page)
+	return output.Bytes(), nil
 }
