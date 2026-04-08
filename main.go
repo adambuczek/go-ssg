@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"log"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/yuin/goldmark"
 	"gopkg.in/yaml.v3"
@@ -27,39 +30,51 @@ type Page struct {
 }
 
 func main() {
-	file, err := readFile("test.md")
+	markdownFiles, err := findMarkdownFiles("src/")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	rawMeta, rawBody, err := splitMeta(file)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Println(string(rawBody))
+	for _, path := range markdownFiles {
+		file, err := readFile(path)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	meta, err := parseMeta(rawMeta)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("%+v", meta)
+		rawMeta, rawBody, err := splitMeta(file)
+		if err != nil {
+			log.Fatalf("error when processing %s: %v", path, err)
+		}
 
-	body, err := renderBody(rawBody)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Printf("%s", body)
+		meta, err := parseMeta(rawMeta)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	page := Page{
-		Meta: meta,
-		Body: template.HTML(body),
-	}
+		body, err := renderBody(rawBody)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	renderedPage, err := renderPage(page, "./template.html")
-	if err != nil {
-		log.Fatal(err)
+		page := Page{
+			Meta: meta,
+			Body: template.HTML(body),
+		}
+
+		layout := layoutPath(page.Meta.Layout)
+
+		renderedPage, err := renderPage(page, layout)
+		if err != nil {
+			log.Fatalf("error when processing %s: %v", path, err)
+		}
+
+		output := outputPath(path)
+
+		err = writeFile(output, renderedPage)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
-	log.Printf("%s", renderedPage)
 }
 
 func readFile(path string) ([]byte, error) {
@@ -98,8 +113,49 @@ func renderPage(page Page, templatePath string) ([]byte, error) {
 	var output bytes.Buffer
 	layout, err := template.ParseFiles(templatePath)
 	if err != nil {
+		return nil, fmt.Errorf("error parsing laout file: %v", err)
+	}
+	err = layout.Execute(&output, page)
+	if err != nil {
 		return nil, err
 	}
-	layout.Execute(&output, page)
 	return output.Bytes(), nil
+}
+
+func findMarkdownFiles(root string) ([]string, error) {
+	var files []string
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if d.IsDir() {
+			return nil
+		}
+		if strings.HasSuffix(path, ".md") {
+			files = append(files, path)
+		}
+		return nil
+	})
+	return files, err
+}
+
+func outputPath(path string) string {
+	sourceTrimmed := strings.TrimPrefix(path, "src/")
+	extTrimmed := strings.TrimSuffix(sourceTrimmed, ".md")
+	return filepath.Join("dist", extTrimmed, "index.html")
+}
+
+func writeFile(path string, data []byte) error {
+	dirname := filepath.Dir(path)
+	err := os.MkdirAll(dirname, fs.FileMode(0o755))
+	if err != nil {
+		return err
+	}
+	err = os.WriteFile(path, data, fs.FileMode(0o644))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func layoutPath(layout string) string {
+	layoutsRoot := "./src/layouts"
+	return filepath.Join(layoutsRoot, layout)
 }
