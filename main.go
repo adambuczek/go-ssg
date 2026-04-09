@@ -9,15 +9,48 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
 	"gopkg.in/yaml.v3"
 )
+
+type Config struct {
+	Src     string
+	Dist    string
+	Layouts string
+}
+
+var config Config
+
+func loadConfig() Config {
+	path := "config.yaml"
+	file, err := os.ReadFile(path)
+	if err != nil {
+		log.Fatalf("error reading config file: %v", err)
+	}
+	var output Config
+	err = yaml.Unmarshal(file, &output)
+	if err != nil {
+		log.Fatalf("error parsing config file: %v", err)
+	}
+	if output.Src == "" {
+		log.Fatal("config: src is required")
+	}
+	if output.Dist == "" {
+		log.Fatal("config: dist is required")
+	}
+	if output.Layouts == "" {
+		log.Fatal("config: layouts is required")
+	}
+	return output
+}
 
 type Meta struct {
 	Layout    string
 	Title     string
-	Date      string
+	Date      time.Time
 	Tags      []string
 	Published bool
 	Excerpt   string
@@ -30,13 +63,15 @@ type Page struct {
 }
 
 func main() {
-	markdownFiles, err := findMarkdownFiles("src/")
+	config = loadConfig()
+
+	markdownFiles, err := findMarkdownFiles(config.Src)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	for _, path := range markdownFiles {
-		file, err := readFile(path)
+		file, err := os.ReadFile(path)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -61,7 +96,7 @@ func main() {
 			Body: template.HTML(body),
 		}
 
-		layout := layoutPath(page.Meta.Layout)
+		layout := filepath.Join(config.Layouts, page.Meta.Layout)
 
 		renderedPage, err := renderPage(page, layout)
 		if err != nil {
@@ -75,11 +110,6 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-}
-
-func readFile(path string) ([]byte, error) {
-	data, err := os.ReadFile(path)
-	return data, err
 }
 
 func splitMeta(file []byte) ([]byte, []byte, error) {
@@ -104,16 +134,26 @@ func parseMeta(yamlData []byte) (Meta, error) {
 
 func renderBody(content []byte) ([]byte, error) {
 	var output bytes.Buffer
-	md := goldmark.New()
+	md := goldmark.New(
+		goldmark.WithExtensions(
+			extension.Footnote,
+			extension.DefinitionList,
+		),
+	)
 	err := md.Convert(content, &output)
 	return output.Bytes(), err
 }
 
 func renderPage(page Page, templatePath string) ([]byte, error) {
 	var output bytes.Buffer
-	layout, err := template.ParseFiles(templatePath)
+	layout, err := template.New(
+		filepath.Base(templatePath),
+	).Funcs(
+		template.FuncMap{
+			"formatDate": formatDate,
+		}).ParseFiles(templatePath)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing laout file: %v", err)
+		return nil, fmt.Errorf("error parsing layout file: %v", err)
 	}
 	err = layout.Execute(&output, page)
 	if err != nil {
@@ -137,9 +177,9 @@ func findMarkdownFiles(root string) ([]string, error) {
 }
 
 func outputPath(path string) string {
-	sourceTrimmed := strings.TrimPrefix(path, "src/")
+	sourceTrimmed := strings.TrimPrefix(path, config.Src)
 	extTrimmed := strings.TrimSuffix(sourceTrimmed, ".md")
-	return filepath.Join("dist", extTrimmed, "index.html")
+	return filepath.Join(config.Dist, extTrimmed, "index.html")
 }
 
 func writeFile(path string, data []byte) error {
@@ -155,7 +195,6 @@ func writeFile(path string, data []byte) error {
 	return nil
 }
 
-func layoutPath(layout string) string {
-	layoutsRoot := "./src/layouts"
-	return filepath.Join(layoutsRoot, layout)
+func formatDate(t time.Time) string {
+	return t.Format("January 2, 2006")
 }
