@@ -20,6 +20,7 @@ type Config struct {
 	Src     string
 	Dist    string
 	Layouts string
+	Assets  string
 }
 
 var config Config
@@ -43,6 +44,9 @@ func loadConfig() Config {
 	}
 	if output.Layouts == "" {
 		log.Fatal("config: layouts is required")
+	}
+	if output.Assets == "" {
+		log.Fatal("config: assets is required")
 	}
 	return output
 }
@@ -109,7 +113,6 @@ func main() {
 	collections := buildCollections(pages)
 
 	for _, page := range pages {
-
 		page.Collections = collections
 
 		layout := filepath.Join(config.Layouts, page.Meta.Layout)
@@ -125,6 +128,11 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+	}
+
+	err = copyAssets()
+	if err != nil {
+		log.Fatal(err)
 	}
 }
 
@@ -223,4 +231,17 @@ func buildCollections(pages []Page) Collections {
 		}
 	}
 	return collections
+}
+
+func copyAssets() error {
+	target := filepath.Join(config.Dist, filepath.Base(config.Assets))
+	err := os.MkdirAll(target, fs.FileMode(0o755))
+	if err != nil {
+		return err
+	}
+	err = os.CopyFS(target, os.DirFS(config.Assets))
+	if err != nil {
+		return err
+	}
+	return nil
 }

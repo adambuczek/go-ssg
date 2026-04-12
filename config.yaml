@@ -1,3 +1,4 @@
 src: src
 dist: dist
 layouts: src/_layouts
+assets: src/assets
