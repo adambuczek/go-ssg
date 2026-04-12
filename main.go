@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"io/fs"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
@@ -140,6 +141,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// dev server
+	serve("8080")
 }
 
 // build utils
@@ -264,3 +268,9 @@ func sortByDateDescInPlace(pages []Page) []Page {
 }
 
 // dev server
+func serve(port string) error {
+	addr := ":" + port
+	handler := http.FileServer(http.Dir(config.Dist))
+	log.Printf("serving at http://localhost%s", addr)
+	return http.ListenAndServe(addr, handler)
+}
