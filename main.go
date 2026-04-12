@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -73,6 +74,11 @@ type Page struct {
 func main() {
 	config = loadConfig()
 
+	err := os.RemoveAll(config.Dist)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	markdownFiles, err := findMarkdownFiles(config.Src)
 	if err != nil {
 		log.Fatal(err)
@@ -136,6 +142,8 @@ func main() {
 	}
 }
 
+// build utils
+
 func splitMeta(file []byte) ([]byte, []byte, error) {
 	const frontMatterSplitter = "---\n"
 	prefix := []byte(frontMatterSplitter)
@@ -174,7 +182,8 @@ func renderPage(page Page, templatePath string) ([]byte, error) {
 		filepath.Base(templatePath),
 	).Funcs(
 		template.FuncMap{
-			"formatDate": formatDate,
+			"formatDate":            formatDate,
+			"sortByDateDescInPlace": sortByDateDescInPlace,
 		}).ParseFiles(templatePath)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing layout file: %v", err)
@@ -219,10 +228,6 @@ func writeFile(path string, data []byte) error {
 	return nil
 }
 
-func formatDate(t time.Time) string {
-	return t.Format("January 2, 2006")
-}
-
 func buildCollections(pages []Page) Collections {
 	collections := Collections{}
 	for _, page := range pages {
@@ -245,3 +250,17 @@ func copyAssets() error {
 	}
 	return nil
 }
+
+// template functions
+func formatDate(t time.Time) string {
+	return t.Format("January 2, 2006")
+}
+
+func sortByDateDescInPlace(pages []Page) []Page {
+	sort.Slice(pages, func(i, j int) bool {
+		return pages[i].Meta.Date.After(pages[j].Meta.Date)
+	})
+	return pages
+}
+
+// dev server

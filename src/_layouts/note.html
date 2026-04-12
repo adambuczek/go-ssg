@@ -13,7 +13,7 @@
     <aside>
         {{range $tag, $pages := .Collections}}                                                                                                                                                    
         <h2>{{$tag}}</h2>                                                                                                                            
-        {{range $pages}}                                                                                                                                                                        
+        {{range sortByDateDescInPlace $pages}}                                                                                                                                                                        
           <p>{{.Meta.Title}}</p>                                                                                                                                                                
         {{end}}                                                                                                                                                                                 
       {{end}}    
