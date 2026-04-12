@@ -10,5 +10,13 @@
     <time>{{formatDate .Meta.Date}}</time>
     {{.Body}}
   </article>
+    <aside>
+        {{range $tag, $pages := .Collections}}                                                                                                                                                    
+        <h2>{{$tag}}</h2>                                                                                                                            
+        {{range $pages}}                                                                                                                                                                        
+          <p>{{.Meta.Title}}</p>                                                                                                                                                                
+        {{end}}                                                                                                                                                                                 
+      {{end}}    
+    </aside>
 </body>
 </html>

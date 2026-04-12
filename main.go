@@ -57,9 +57,13 @@ type Meta struct {
 	Image     string
 }
 
+type Collections map[string][]Page
+
 type Page struct {
-	Meta Meta
-	Body template.HTML
+	Meta        Meta
+	Body        template.HTML
+	OriginPath  string
+	Collections Collections
 }
 
 func main() {
@@ -69,6 +73,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	var pages []Page
 
 	for _, path := range markdownFiles {
 		file, err := os.ReadFile(path)
@@ -92,18 +98,28 @@ func main() {
 		}
 
 		page := Page{
-			Meta: meta,
-			Body: template.HTML(body),
+			Meta:       meta,
+			Body:       template.HTML(body),
+			OriginPath: path,
 		}
+
+		pages = append(pages, page)
+	}
+
+	collections := buildCollections(pages)
+
+	for _, page := range pages {
+
+		page.Collections = collections
 
 		layout := filepath.Join(config.Layouts, page.Meta.Layout)
 
 		renderedPage, err := renderPage(page, layout)
 		if err != nil {
-			log.Fatalf("error when processing %s: %v", path, err)
+			log.Fatalf("error when processing %s: %v", page.OriginPath, err)
 		}
 
-		output := outputPath(path)
+		output := outputPath(page.OriginPath)
 
 		err = writeFile(output, renderedPage)
 		if err != nil {
@@ -197,4 +213,14 @@ func writeFile(path string, data []byte) error {
 
 func formatDate(t time.Time) string {
 	return t.Format("January 2, 2006")
+}
+
+func buildCollections(pages []Page) Collections {
+	collections := Collections{}
+	for _, page := range pages {
+		for _, tag := range page.Meta.Tags {
+			collections[tag] = append(collections[tag], page)
+		}
+	}
+	return collections
 }
