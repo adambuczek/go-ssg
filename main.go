@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -13,19 +14,28 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
-	Src     string
-	Dist    string
-	Layouts string
-	Assets  string
+	Src            string
+	Dist           string
+	Layouts        string
+	Assets         string
+	PollingTimeout time.Duration
 }
 
-var config Config
+var (
+	config Config
+	dev    bool
+)
+
+const (
+	defaultPollingTimeout = 1 * time.Second
+)
 
 func loadConfig() Config {
 	path := "config.yaml"
@@ -50,6 +60,9 @@ func loadConfig() Config {
 	if output.Assets == "" {
 		log.Fatal("config: assets is required")
 	}
+	if output.PollingTimeout == 0 {
+		output.PollingTimeout = defaultPollingTimeout
+	}
 	return output
 }
 
@@ -73,16 +86,37 @@ type Page struct {
 }
 
 func main() {
+	flag.BoolVar(
+		&dev,
+		"dev",
+		false,
+		"enable to start a server with hot reload that watches source directory recursively",
+	)
+	flag.Parse()
 	config = loadConfig()
+	if err := build(); err != nil {
+		log.Fatal(err)
+	}
+	if dev {
+		go watch()
 
+		// dev server
+		if err := serve("8080"); err != nil {
+			log.Fatal(err)
+		}
+	}
+}
+
+// build utils
+func build() error {
 	err := os.RemoveAll(config.Dist)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	markdownFiles, err := findMarkdownFiles(config.Src)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	var pages []Page
@@ -90,22 +124,26 @@ func main() {
 	for _, path := range markdownFiles {
 		file, err := os.ReadFile(path)
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("skipping %s: %v", path, err)
+			continue
 		}
 
 		rawMeta, rawBody, err := splitMeta(file)
 		if err != nil {
-			log.Fatalf("error when processing %s: %v", path, err)
+			log.Printf("skipping %s: %v", path, err)
+			continue
 		}
 
 		meta, err := parseMeta(rawMeta)
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("skipping %s: %v", path, err)
+			continue
 		}
 
 		body, err := renderBody(rawBody)
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("skipping %s: %v", path, err)
+			continue
 		}
 
 		page := Page{
@@ -126,27 +164,29 @@ func main() {
 
 		renderedPage, err := renderPage(page, layout)
 		if err != nil {
-			log.Fatalf("error when processing %s: %v", page.OriginPath, err)
+			log.Printf("skipping %s: %v", page.OriginPath, err)
+			continue
+		}
+
+		if dev {
+			renderedPage = injectReloadScript(renderedPage)
 		}
 
 		output := outputPath(page.OriginPath)
 
 		err = writeFile(output, renderedPage)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 	}
 
 	err = copyAssets()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
-	// dev server
-	serve("8080")
+	return nil
 }
-
-// build utils
 
 func splitMeta(file []byte) ([]byte, []byte, error) {
 	const frontMatterSplitter = "---\n"
@@ -268,9 +308,79 @@ func sortByDateDescInPlace(pages []Page) []Page {
 }
 
 // dev server
+var reloadCh = make(chan struct{}, 1)
+
+func watch() {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer watcher.Close()
+
+	filepath.WalkDir(config.Src, func(path string, d fs.DirEntry, err error) error {
+		if d.IsDir() {
+			watcher.Add(path)
+		}
+		return nil
+	})
+
+	timer := time.NewTimer(0)
+	<-timer.C
+
+	for {
+		select {
+		case _, ok := <-watcher.Events:
+			if !ok {
+				return
+			}
+			timer.Reset(config.PollingTimeout)
+
+		case <-timer.C:
+			log.Println("rebuilding...")
+			if err := build(); err != nil {
+				log.Println("build error:", err)
+			}
+			select {
+			case reloadCh <- struct{}{}:
+			default:
+			}
+
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return
+			}
+			log.Println(err)
+		}
+	}
+}
+
+func sseHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	select {
+	case <-reloadCh:
+		fmt.Fprintf(w, "data: reload\n\n")
+		w.(http.Flusher).Flush()
+	case <-r.Context().Done():
+	}
+}
+
 func serve(port string) error {
 	addr := ":" + port
-	handler := http.FileServer(http.Dir(config.Dist))
+	http.Handle("/", http.FileServer(http.Dir(config.Dist)))
+	http.HandleFunc("/_reload", sseHandler)
 	log.Printf("serving at http://localhost%s", addr)
-	return http.ListenAndServe(addr, handler)
+	return http.ListenAndServe(addr, nil)
+}
+
+func injectReloadScript(html []byte) []byte {
+	anchorPoint := []byte("</body>")
+	script := []byte(`
+		<script> 
+			new EventSource('/_reload').onmessage=()=>location.reload();
+		</script> 
+	`)
+	return bytes.Replace(html, anchorPoint, append(script, anchorPoint...), 1)
 }
