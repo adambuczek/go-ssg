@@ -1,4 +1,4 @@
-module go-portfolio-generator
+module github.com/adambuczek/go-ssg
 
 go 1.25.8
 
