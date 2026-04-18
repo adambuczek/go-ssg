@@ -267,6 +267,9 @@ func findMarkdownFiles(root string) ([]string, error) {
 func outputPath(path string) string {
 	sourceTrimmed := strings.TrimPrefix(path, config.Src)
 	extTrimmed := strings.TrimSuffix(sourceTrimmed, ".md")
+	if filepath.Base(extTrimmed) == "index" {
+		return filepath.Join(config.Dist, extTrimmed+".html")
+	}
 	return filepath.Join(config.Dist, extTrimmed, "index.html")
 }
 
