@@ -20,6 +20,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var md = goldmark.New(
+	goldmark.WithExtensions(
+		extension.Footnote,
+		extension.DefinitionList,
+	),
+)
+
 type Config struct {
 	Src            string
 	Dist           string
@@ -67,13 +74,14 @@ func loadConfig() Config {
 }
 
 type Meta struct {
-	Layout    string
-	Title     string
-	Date      time.Time
-	Tags      []string
-	Published bool
-	Excerpt   string
-	Image     string
+	Layout      string
+	Title       string
+	Description string
+	Date        time.Time
+	Tags        []string
+	Published   bool
+	Excerpt     string
+	Image       string
 }
 
 type Collections map[string][]Page
@@ -83,6 +91,7 @@ type Page struct {
 	Body        template.HTML
 	OriginPath  string
 	Collections Collections
+	URL         string
 }
 
 func main() {
@@ -140,7 +149,7 @@ func build() error {
 			continue
 		}
 
-		body, err := renderBody(rawBody)
+		body, err := renderMarkdown(rawBody)
 		if err != nil {
 			log.Printf("skipping %s: %v", path, err)
 			continue
@@ -151,6 +160,13 @@ func build() error {
 			Body:       template.HTML(body),
 			OriginPath: path,
 		}
+
+		page.URL = "/" + strings.TrimPrefix(
+			strings.TrimSuffix(
+				page.OriginPath,
+				".md",
+			),
+			config.Src+"/") + "/"
 
 		pages = append(pages, page)
 	}
@@ -208,14 +224,8 @@ func parseMeta(yamlData []byte) (Meta, error) {
 	return meta, err
 }
 
-func renderBody(content []byte) ([]byte, error) {
+func renderMarkdown(content []byte) ([]byte, error) {
 	var output bytes.Buffer
-	md := goldmark.New(
-		goldmark.WithExtensions(
-			extension.Footnote,
-			extension.DefinitionList,
-		),
-	)
 	err := md.Convert(content, &output)
 	return output.Bytes(), err
 }
@@ -228,6 +238,7 @@ func renderPage(page Page, templatePath string) ([]byte, error) {
 		template.FuncMap{
 			"formatDate":            formatDate,
 			"sortByDateDescInPlace": sortByDateDescInPlace,
+			"renderMarkdown":        renderInlineMarkdown,
 		}).ParseFiles(templatePath)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing layout file: %v", err)
@@ -305,6 +316,14 @@ func sortByDateDescInPlace(pages []Page) []Page {
 		return pages[i].Meta.Date.After(pages[j].Meta.Date)
 	})
 	return pages
+}
+
+func renderInlineMarkdown(s string) template.HTML {
+	rendered, err := renderMarkdown([]byte(s))
+	if err != nil {
+		log.Printf("problem rendering inline markdown: %s", err)
+	}
+	return template.HTML(string(rendered))
 }
 
 // dev server
