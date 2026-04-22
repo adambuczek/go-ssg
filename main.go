@@ -239,7 +239,7 @@ func renderPage(page Page, templatePath string) ([]byte, error) {
 			"formatDate":            formatDate,
 			"sortByDateDescInPlace": sortByDateDescInPlace,
 			"renderMarkdown":        renderInlineMarkdown,
-		}).ParseFiles(templatePath)
+		}).ParseGlob(filepath.Join(config.Layouts, "*.html"))
 	if err != nil {
 		return nil, fmt.Errorf("error parsing layout file: %v", err)
 	}
