@@ -17,6 +17,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
 	"gopkg.in/yaml.v3"
 )
 
@@ -24,6 +25,10 @@ var md = goldmark.New(
 	goldmark.WithExtensions(
 		extension.Footnote,
 		extension.DefinitionList,
+	),
+	goldmark.WithParserOptions(
+		parser.WithAutoHeadingID(),
+		parser.WithAttribute(),
 	),
 )
 
