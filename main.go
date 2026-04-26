@@ -89,7 +89,7 @@ type Meta struct {
 	Image       string
 }
 
-type Collections map[string][]Page
+type Collections map[string][]*Page
 
 type Page struct {
 	Meta        Meta
@@ -133,7 +133,7 @@ func build() error {
 		return err
 	}
 
-	var pages []Page
+	var pages []*Page
 
 	for _, path := range markdownFiles {
 		file, err := os.ReadFile(path)
@@ -173,7 +173,7 @@ func build() error {
 			),
 			config.Src+"/") + "/"
 
-		pages = append(pages, page)
+		pages = append(pages, &page)
 	}
 
 	collections := buildCollections(pages)
@@ -183,7 +183,7 @@ func build() error {
 
 		layout := filepath.Join(config.Layouts, page.Meta.Layout)
 
-		renderedPage, err := renderPage(page, layout)
+		renderedPage, err := renderPage(*page, layout)
 		if err != nil {
 			log.Printf("skipping %s: %v", page.OriginPath, err)
 			continue
@@ -241,9 +241,9 @@ func renderPage(page Page, templatePath string) ([]byte, error) {
 		filepath.Base(templatePath),
 	).Funcs(
 		template.FuncMap{
-			"formatDate":            formatDate,
-			"sortByDateDescInPlace": sortByDateDescInPlace,
-			"renderMarkdown":        renderInlineMarkdown,
+			"formatDate":     formatDate,
+			"sortByDateDesc": sortByDateDesc,
+			"renderMarkdown": renderInlineMarkdown,
 		}).ParseGlob(filepath.Join(config.Layouts, "*.html"))
 	if err != nil {
 		return nil, fmt.Errorf("error parsing layout file: %v", err)
@@ -294,7 +294,7 @@ func writeFile(path string, data []byte) error {
 	return nil
 }
 
-func buildCollections(pages []Page) Collections {
+func buildCollections(pages []*Page) Collections {
 	collections := Collections{}
 	for _, page := range pages {
 		for _, tag := range page.Meta.Tags {
@@ -322,11 +322,12 @@ func formatDate(t time.Time) string {
 	return t.Format("January 2, 2006")
 }
 
-func sortByDateDescInPlace(pages []Page) []Page {
-	sort.Slice(pages, func(i, j int) bool {
-		return pages[i].Meta.Date.After(pages[j].Meta.Date)
+func sortByDateDesc(pages []*Page) []*Page {
+	sorted := append([]*Page{}, pages...)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Meta.Date.After(sorted[j].Meta.Date)
 	})
-	return pages
+	return sorted
 }
 
 func renderInlineMarkdown(s string) template.HTML {
