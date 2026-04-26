@@ -348,8 +348,15 @@ func watch() {
 	defer watcher.Close()
 
 	filepath.WalkDir(config.Src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			log.Printf("problem adding %s to watched directories: %s", path, err)
+			return filepath.SkipDir
+		}
 		if d.IsDir() {
-			watcher.Add(path)
+			err := watcher.Add(path)
+			if err != nil {
+				log.Printf("problem adding %s to watched directories: %s", path, err)
+			}
 		}
 		return nil
 	})
