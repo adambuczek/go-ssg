@@ -258,6 +258,9 @@ func renderPage(page Page, templatePath string) ([]byte, error) {
 func findMarkdownFiles(root string) ([]string, error) {
 	var files []string
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
 		if d.IsDir() {
 			return nil
 		}
