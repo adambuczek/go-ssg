@@ -392,7 +392,9 @@ func sseHandler(w http.ResponseWriter, r *http.Request) {
 	select {
 	case <-reloadCh:
 		fmt.Fprintf(w, "data: reload\n\n")
-		w.(http.Flusher).Flush()
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
 	case <-r.Context().Done():
 	}
 }
