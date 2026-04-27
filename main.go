@@ -49,33 +49,33 @@ const (
 	defaultPollingTimeout = 1 * time.Second
 )
 
-func loadConfig() Config {
+func loadConfig() (Config, error) {
 	path := "config.yaml"
 	file, err := os.ReadFile(path)
 	if err != nil {
-		log.Fatalf("error reading config file: %v", err)
+		return Config{}, fmt.Errorf("error reading config file: %v", err)
 	}
 	var output Config
 	err = yaml.Unmarshal(file, &output)
 	if err != nil {
-		log.Fatalf("error parsing config file: %v", err)
+		return Config{}, err
 	}
 	if output.Src == "" {
-		log.Fatal("config: src is required")
+		return Config{}, fmt.Errorf("config: %s is required", "src")
 	}
 	if output.Dist == "" {
-		log.Fatal("config: dist is required")
+		return Config{}, fmt.Errorf("config: %s is required", "dist")
 	}
 	if output.Layouts == "" {
-		log.Fatal("config: layouts is required")
+		return Config{}, fmt.Errorf("config: %s is required", "layouts")
 	}
 	if output.Assets == "" {
-		log.Fatal("config: assets is required")
+		return Config{}, fmt.Errorf("config: %s is required", "assets")
 	}
 	if output.PollingTimeout == 0 {
 		output.PollingTimeout = defaultPollingTimeout
 	}
-	return output
+	return output, nil
 }
 
 type Meta struct {
@@ -107,7 +107,14 @@ func main() {
 		"enable to start a server with hot reload that watches source directory recursively",
 	)
 	flag.Parse()
-	config = loadConfig()
+
+	parsedConfig, err := loadConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	config = parsedConfig
+
 	if err := build(); err != nil {
 		log.Fatal(err)
 	}
