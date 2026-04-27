@@ -38,12 +38,10 @@ type Config struct {
 	Layouts        string
 	Assets         string
 	PollingTimeout time.Duration
+	Port           string
 }
 
-var (
-	config Config
-	dev    bool
-)
+var dev bool
 
 const (
 	defaultPollingTimeout = 1 * time.Second
@@ -74,6 +72,9 @@ func loadConfig() (Config, error) {
 	}
 	if output.PollingTimeout == 0 {
 		output.PollingTimeout = defaultPollingTimeout
+	}
+	if output.Port == "" {
+		output.Port = "8080"
 	}
 	return output, nil
 }
@@ -108,28 +109,26 @@ func main() {
 	)
 	flag.Parse()
 
-	parsedConfig, err := loadConfig()
+	config, err := loadConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	config = parsedConfig
-
-	if err := build(); err != nil {
+	if err := build(config); err != nil {
 		log.Fatal(err)
 	}
 	if dev {
-		go watch()
+		go watch(config)
 
 		// dev server
-		if err := serve("8080"); err != nil {
+		if err := serve(config); err != nil {
 			log.Fatal(err)
 		}
 	}
 }
 
 // build utils
-func build() error {
+func build(config Config) error {
 	err := os.RemoveAll(config.Dist)
 	if err != nil {
 		return err
@@ -190,7 +189,7 @@ func build() error {
 
 		layout := filepath.Join(config.Layouts, page.Meta.Layout)
 
-		renderedPage, err := renderPage(*page, layout)
+		renderedPage, err := renderPage(*page, layout, config)
 		if err != nil {
 			log.Printf("skipping %s: %v", page.OriginPath, err)
 			continue
@@ -200,7 +199,7 @@ func build() error {
 			renderedPage = injectReloadScript(renderedPage)
 		}
 
-		output := outputPath(page.OriginPath)
+		output := outputPath(page.OriginPath, config)
 
 		err = writeFile(output, renderedPage)
 		if err != nil {
@@ -208,7 +207,7 @@ func build() error {
 		}
 	}
 
-	err = copyAssets()
+	err = copyAssets(config)
 	if err != nil {
 		return err
 	}
@@ -242,7 +241,7 @@ func renderMarkdown(content []byte) ([]byte, error) {
 	return output.Bytes(), err
 }
 
-func renderPage(page Page, templatePath string) ([]byte, error) {
+func renderPage(page Page, templatePath string, config Config) ([]byte, error) {
 	var output bytes.Buffer
 	layout, err := template.New(
 		filepath.Base(templatePath),
@@ -279,7 +278,7 @@ func findMarkdownFiles(root string) ([]string, error) {
 	return files, err
 }
 
-func outputPath(path string) string {
+func outputPath(path string, config Config) string {
 	sourceTrimmed := strings.TrimPrefix(path, config.Src)
 	extTrimmed := strings.TrimSuffix(sourceTrimmed, ".md")
 	if filepath.Base(extTrimmed) == "index" {
@@ -311,7 +310,7 @@ func buildCollections(pages []*Page) Collections {
 	return collections
 }
 
-func copyAssets() error {
+func copyAssets(config Config) error {
 	target := filepath.Join(config.Dist, filepath.Base(config.Assets))
 	err := os.MkdirAll(target, fs.FileMode(0o755))
 	if err != nil {
@@ -348,7 +347,7 @@ func renderInlineMarkdown(s string) template.HTML {
 // dev server
 var reloadCh = make(chan struct{}, 1)
 
-func watch() {
+func watch(config Config) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.Fatal(err)
@@ -382,7 +381,7 @@ func watch() {
 
 		case <-timer.C:
 			log.Println("rebuilding...")
-			if err := build(); err != nil {
+			if err := build(config); err != nil {
 				log.Println("build error:", err)
 			}
 			select {
@@ -414,8 +413,8 @@ func sseHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func serve(port string) error {
-	addr := ":" + port
+func serve(config Config) error {
+	addr := ":" + config.Port
 	http.Handle("/", http.FileServer(http.Dir(config.Dist)))
 	http.HandleFunc("/_reload", sseHandler)
 	log.Printf("serving at http://localhost%s", addr)
