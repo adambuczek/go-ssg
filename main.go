@@ -41,8 +41,6 @@ type Config struct {
 	Port           string
 }
 
-var dev bool
-
 const (
 	defaultPollingTimeout = 1 * time.Second
 )
@@ -101,6 +99,7 @@ type Page struct {
 }
 
 func main() {
+	var dev bool
 	flag.BoolVar(
 		&dev,
 		"dev",
@@ -114,7 +113,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err := build(config); err != nil {
+	if err := build(config, dev); err != nil {
 		log.Fatal(err)
 	}
 	if dev {
@@ -128,7 +127,7 @@ func main() {
 }
 
 // build utils
-func build(config Config) error {
+func build(config Config, dev bool) error {
 	err := os.RemoveAll(config.Dist)
 	if err != nil {
 		return err
@@ -184,12 +183,20 @@ func build(config Config) error {
 
 	collections := buildCollections(pages)
 
+	layouts, err := template.New("").Funcs(
+		template.FuncMap{
+			"formatDate":     formatDate,
+			"sortByDateDesc": sortByDateDesc,
+			"renderMarkdown": renderInlineMarkdown,
+		}).ParseGlob(filepath.Join(config.Layouts, "*.html"))
+	if err != nil {
+		return fmt.Errorf("error when parsing layout tempaltes: %v", err)
+	}
+
 	for _, page := range pages {
 		page.Collections = collections
 
-		layout := filepath.Join(config.Layouts, page.Meta.Layout)
-
-		renderedPage, err := renderPage(*page, layout, config)
+		renderedPage, err := renderPage(*page, layouts)
 		if err != nil {
 			log.Printf("skipping %s: %v", page.OriginPath, err)
 			continue
@@ -241,20 +248,9 @@ func renderMarkdown(content []byte) ([]byte, error) {
 	return output.Bytes(), err
 }
 
-func renderPage(page Page, templatePath string, config Config) ([]byte, error) {
+func renderPage(page Page, layouts *template.Template) ([]byte, error) {
 	var output bytes.Buffer
-	layout, err := template.New(
-		filepath.Base(templatePath),
-	).Funcs(
-		template.FuncMap{
-			"formatDate":     formatDate,
-			"sortByDateDesc": sortByDateDesc,
-			"renderMarkdown": renderInlineMarkdown,
-		}).ParseGlob(filepath.Join(config.Layouts, "*.html"))
-	if err != nil {
-		return nil, fmt.Errorf("error parsing layout file: %v", err)
-	}
-	err = layout.Execute(&output, page)
+	err := layouts.ExecuteTemplate(&output, page.Meta.Layout, page)
 	if err != nil {
 		return nil, err
 	}
@@ -381,7 +377,7 @@ func watch(config Config) {
 
 		case <-timer.C:
 			log.Println("rebuilding...")
-			if err := build(config); err != nil {
+			if err := build(config, true); err != nil {
 				log.Println("build error:", err)
 			}
 			select {
