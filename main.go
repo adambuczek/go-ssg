@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/adambuczek/go-ssg/config"
 	"github.com/fsnotify/fsnotify"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
@@ -31,51 +32,6 @@ var md = goldmark.New(
 		parser.WithAttribute(),
 	),
 )
-
-type Config struct {
-	Src            string
-	Dist           string
-	Layouts        string
-	Assets         string
-	PollingTimeout time.Duration
-	Port           string
-}
-
-const (
-	defaultPollingTimeout = 1 * time.Second
-)
-
-func loadConfig() (Config, error) {
-	path := "config.yaml"
-	file, err := os.ReadFile(path)
-	if err != nil {
-		return Config{}, fmt.Errorf("error reading config file: %v", err)
-	}
-	var output Config
-	err = yaml.Unmarshal(file, &output)
-	if err != nil {
-		return Config{}, err
-	}
-	if output.Src == "" {
-		return Config{}, fmt.Errorf("config: %s is required", "src")
-	}
-	if output.Dist == "" {
-		return Config{}, fmt.Errorf("config: %s is required", "dist")
-	}
-	if output.Layouts == "" {
-		return Config{}, fmt.Errorf("config: %s is required", "layouts")
-	}
-	if output.Assets == "" {
-		return Config{}, fmt.Errorf("config: %s is required", "assets")
-	}
-	if output.PollingTimeout == 0 {
-		output.PollingTimeout = defaultPollingTimeout
-	}
-	if output.Port == "" {
-		output.Port = "8080"
-	}
-	return output, nil
-}
 
 type Meta struct {
 	Layout      string
@@ -108,32 +64,32 @@ func main() {
 	)
 	flag.Parse()
 
-	config, err := loadConfig()
+	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if err := build(config, dev); err != nil {
+	if err := build(cfg, dev); err != nil {
 		log.Fatal(err)
 	}
 	if dev {
-		go watch(config)
+		go watch(cfg)
 
 		// dev server
-		if err := serve(config); err != nil {
+		if err := serve(cfg); err != nil {
 			log.Fatal(err)
 		}
 	}
 }
 
 // build utils
-func build(config Config, dev bool) error {
-	err := os.RemoveAll(config.Dist)
+func build(cfg config.Config, dev bool) error {
+	err := os.RemoveAll(cfg.Dist)
 	if err != nil {
 		return err
 	}
 
-	markdownFiles, err := findMarkdownFiles(config.Src)
+	markdownFiles, err := findMarkdownFiles(cfg.Src)
 	if err != nil {
 		return err
 	}
@@ -176,7 +132,7 @@ func build(config Config, dev bool) error {
 				page.OriginPath,
 				".md",
 			),
-			config.Src+"/") + "/"
+			cfg.Src+"/") + "/"
 
 		pages = append(pages, &page)
 	}
@@ -188,7 +144,7 @@ func build(config Config, dev bool) error {
 			"formatDate":     formatDate,
 			"sortByDateDesc": sortByDateDesc,
 			"renderMarkdown": renderInlineMarkdown,
-		}).ParseGlob(filepath.Join(config.Layouts, "*.html"))
+		}).ParseGlob(filepath.Join(cfg.Layouts, "*.html"))
 	if err != nil {
 		return fmt.Errorf("error when parsing layout tempaltes: %v", err)
 	}
@@ -206,7 +162,7 @@ func build(config Config, dev bool) error {
 			renderedPage = injectReloadScript(renderedPage)
 		}
 
-		output := outputPath(page.OriginPath, config)
+		output := outputPath(page.OriginPath, cfg)
 
 		err = writeFile(output, renderedPage)
 		if err != nil {
@@ -214,7 +170,7 @@ func build(config Config, dev bool) error {
 		}
 	}
 
-	err = copyAssets(config)
+	err = copyAssets(cfg)
 	if err != nil {
 		return err
 	}
@@ -274,13 +230,13 @@ func findMarkdownFiles(root string) ([]string, error) {
 	return files, err
 }
 
-func outputPath(path string, config Config) string {
-	sourceTrimmed := strings.TrimPrefix(path, config.Src)
+func outputPath(path string, cfg config.Config) string {
+	sourceTrimmed := strings.TrimPrefix(path, cfg.Src)
 	extTrimmed := strings.TrimSuffix(sourceTrimmed, ".md")
 	if filepath.Base(extTrimmed) == "index" {
-		return filepath.Join(config.Dist, extTrimmed+".html")
+		return filepath.Join(cfg.Dist, extTrimmed+".html")
 	}
-	return filepath.Join(config.Dist, extTrimmed, "index.html")
+	return filepath.Join(cfg.Dist, extTrimmed, "index.html")
 }
 
 func writeFile(path string, data []byte) error {
@@ -306,13 +262,13 @@ func buildCollections(pages []*Page) Collections {
 	return collections
 }
 
-func copyAssets(config Config) error {
-	target := filepath.Join(config.Dist, filepath.Base(config.Assets))
+func copyAssets(cfg config.Config) error {
+	target := filepath.Join(cfg.Dist, filepath.Base(cfg.Assets))
 	err := os.MkdirAll(target, fs.FileMode(0o755))
 	if err != nil {
 		return err
 	}
-	err = os.CopyFS(target, os.DirFS(config.Assets))
+	err = os.CopyFS(target, os.DirFS(cfg.Assets))
 	if err != nil {
 		return err
 	}
@@ -343,14 +299,14 @@ func renderInlineMarkdown(s string) template.HTML {
 // dev server
 var reloadCh = make(chan struct{}, 1)
 
-func watch(config Config) {
+func watch(cfg config.Config) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer watcher.Close()
 
-	filepath.WalkDir(config.Src, func(path string, d fs.DirEntry, err error) error {
+	filepath.WalkDir(cfg.Src, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			log.Printf("problem adding %s to watched directories: %s", path, err)
 			return filepath.SkipDir
@@ -373,11 +329,11 @@ func watch(config Config) {
 			if !ok {
 				return
 			}
-			timer.Reset(config.PollingTimeout)
+			timer.Reset(cfg.PollingTimeout)
 
 		case <-timer.C:
 			log.Println("rebuilding...")
-			if err := build(config, true); err != nil {
+			if err := build(cfg, true); err != nil {
 				log.Println("build error:", err)
 			}
 			select {
@@ -409,9 +365,9 @@ func sseHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func serve(config Config) error {
-	addr := ":" + config.Port
-	http.Handle("/", http.FileServer(http.Dir(config.Dist)))
+func serve(cfg config.Config) error {
+	addr := ":" + cfg.Port
+	http.Handle("/", http.FileServer(http.Dir(cfg.Dist)))
 	http.HandleFunc("/_reload", sseHandler)
 	log.Printf("serving at http://localhost%s", addr)
 	return http.ListenAndServe(addr, nil)
