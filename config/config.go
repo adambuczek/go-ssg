@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -14,7 +15,7 @@ type Config struct {
 	Dist           string
 	Layouts        string
 	Assets         string
-	PollingTimeout time.Duration
+	PollingTimeout time.Duration `yaml:"polling_timeout"`
 	Port           string
 }
 
@@ -45,6 +46,7 @@ func LoadConfig() (Config, error) {
 	if output.Assets == "" {
 		return Config{}, fmt.Errorf("config: %s is required", "assets")
 	}
+	log.Println(output.PollingTimeout)
 	if output.PollingTimeout == 0 {
 		output.PollingTimeout = defaultPollingTimeout
 	}
