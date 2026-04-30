@@ -38,6 +38,8 @@ func Watch(src string, timeout time.Duration, build func() error) {
 	timer := time.NewTimer(0)
 	<-timer.C
 
+	log.Printf("polling file changes every %s", timeout)
+
 	for {
 		select {
 		case _, ok := <-watcher.Events:

@@ -3,7 +3,6 @@ package config
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"time"
 
@@ -46,7 +45,6 @@ func LoadConfig() (Config, error) {
 	if output.Assets == "" {
 		return Config{}, fmt.Errorf("config: %s is required", "assets")
 	}
-	log.Println(output.PollingTimeout)
 	if output.PollingTimeout == 0 {
 		output.PollingTimeout = defaultPollingTimeout
 	}
