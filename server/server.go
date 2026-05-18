@@ -19,9 +19,9 @@ func Watch(src string, timeout time.Duration, build func() error) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer watcher.Close()
+	defer watcher.Close() //nolint:errcheck
 
-	filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			log.Printf("problem adding %s to watched directories: %s", path, err)
 			return filepath.SkipDir
@@ -34,6 +34,9 @@ func Watch(src string, timeout time.Duration, build func() error) {
 		}
 		return nil
 	})
+	if err != nil {
+		log.Printf("problem walking directories: %s", err)
+	}
 
 	timer := time.NewTimer(0)
 	<-timer.C
@@ -74,7 +77,9 @@ func sseHandler(w http.ResponseWriter, r *http.Request) {
 
 	select {
 	case <-reloadCh:
-		fmt.Fprintf(w, "data: reload\n\n")
+		if _, err := fmt.Fprintf(w, "data: reload\n\n"); err != nil {
+			return
+		}
 		if f, ok := w.(http.Flusher); ok {
 			f.Flush()
 		}
