@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -115,7 +116,7 @@ func Build(cfg config.Config, dev bool) error {
 			"renderMarkdown": renderInlineMarkdown,
 		}).ParseGlob(filepath.Join(cfg.Layouts, "*.html"))
 	if err != nil {
-		return fmt.Errorf("error when parsing layout tempaltes: %v", err)
+		return fmt.Errorf("error when parsing layout templates: %v", err)
 	}
 
 	for _, page := range pages {
@@ -250,7 +251,7 @@ func formatDate(t time.Time) string {
 }
 
 func sortByDateDesc(pages []*Page) []*Page {
-	sorted := append([]*Page{}, pages...)
+	sorted := slices.Clone(pages)
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i].Meta.Date.After(sorted[j].Meta.Date)
 	})

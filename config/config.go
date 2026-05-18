@@ -34,16 +34,16 @@ func LoadConfig() (Config, error) {
 		return Config{}, err
 	}
 	if output.Src == "" {
-		return Config{}, fmt.Errorf("config: %s is required", "src")
+		return Config{}, fmt.Errorf("config: %q is required", "src")
 	}
 	if output.Dist == "" {
-		return Config{}, fmt.Errorf("config: %s is required", "dist")
+		return Config{}, fmt.Errorf("config: %q is required", "dist")
 	}
 	if output.Layouts == "" {
-		return Config{}, fmt.Errorf("config: %s is required", "layouts")
+		return Config{}, fmt.Errorf("config: %q is required", "layouts")
 	}
 	if output.Assets == "" {
-		return Config{}, fmt.Errorf("config: %s is required", "assets")
+		return Config{}, fmt.Errorf("config: %q is required", "assets")
 	}
 	if output.PollingTimeout == 0 {
 		output.PollingTimeout = defaultPollingTimeout
