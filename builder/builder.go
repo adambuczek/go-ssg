@@ -109,7 +109,7 @@ func Build(cfg config.Config, dev bool) error {
 
 	collections := buildCollections(pages)
 
-	layouts, err := template.New("").Funcs(
+	layouts, err := template.New("_root").Funcs(
 		template.FuncMap{
 			"formatDate":     formatDate,
 			"sortByDateDesc": sortByDateDesc,
