@@ -38,6 +38,7 @@ func Watch(src string, timeout time.Duration, build func() error) {
 		log.Printf("problem walking directories: %s", err)
 	}
 
+	// drain inital zero duration tick to prevent immidiate trigger
 	timer := time.NewTimer(0)
 	<-timer.C
 
