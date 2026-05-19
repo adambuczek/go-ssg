@@ -53,3 +53,5 @@ func LoadConfig() (Config, error) {
 	}
 	return output, nil
 }
+
+const ReloadEndpoint = "/_reload"

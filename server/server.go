@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/adambuczek/go-ssg/config"
 	"github.com/fsnotify/fsnotify"
 )
 
@@ -91,7 +92,7 @@ func sseHandler(w http.ResponseWriter, r *http.Request) {
 func Serve(port string, dist string) error {
 	addr := ":" + port
 	http.Handle("/", http.FileServer(http.Dir(dist)))
-	http.HandleFunc("/_reload", sseHandler)
+	http.HandleFunc(config.ReloadEndpoint, sseHandler)
 	log.Printf("serving at http://localhost%s", addr)
 	return http.ListenAndServe(addr, nil)
 }

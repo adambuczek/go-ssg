@@ -268,10 +268,10 @@ func renderInlineMarkdown(s string) template.HTML {
 
 func injectReloadScript(html []byte) []byte {
 	anchorPoint := []byte("</body>")
-	script := []byte(`
+	script := fmt.Appendf([]byte{}, `
 		<script> 
-			new EventSource('/_reload').onmessage=()=>location.reload();
+			new EventSource('%s').onmessage=()=>location.reload();
 		</script> 
-	`)
+	`, config.ReloadEndpoint)
 	return bytes.Replace(html, anchorPoint, append(script, anchorPoint...), 1)
 }
