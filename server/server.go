@@ -15,9 +15,15 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-var reloadCh = make(chan struct{}, 1)
+type Server struct {
+	reloadCh chan struct{}
+}
 
-func Watch(src string, timeout time.Duration, build func() error) {
+func New() *Server {
+	return &Server{reloadCh: make(chan struct{}, 1)}
+}
+
+func (s *Server) Watch(src string, timeout time.Duration, build func() error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.Fatal(err)
@@ -61,7 +67,7 @@ func Watch(src string, timeout time.Duration, build func() error) {
 				log.Println("build error:", err)
 			}
 			select {
-			case reloadCh <- struct{}{}:
+			case s.reloadCh <- struct{}{}:
 			default:
 			}
 
@@ -74,13 +80,13 @@ func Watch(src string, timeout time.Duration, build func() error) {
 	}
 }
 
-func sseHandler(w http.ResponseWriter, r *http.Request) {
+func (s *Server) sseHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
 	select {
-	case <-reloadCh:
+	case <-s.reloadCh:
 		if _, err := fmt.Fprintf(w, "data: reload\n\n"); err != nil {
 			return
 		}
@@ -91,15 +97,16 @@ func sseHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func Serve(portNumber int, dist string) error {
+func (s *Server) Serve(portNumber int, dist string) error {
 	port := strconv.Itoa(portNumber)
 	_, err := net.LookupPort("tcp", port)
 	if err != nil {
 		return err
 	}
 	addr := ":" + port
-	http.Handle("/", http.FileServer(http.Dir(dist)))
-	http.HandleFunc(config.ReloadEndpoint, sseHandler)
+	mux := http.NewServeMux()
+	mux.Handle("/", http.FileServer(http.Dir(dist)))
+	mux.HandleFunc(config.ReloadEndpoint, s.sseHandler)
 	log.Printf("serving at http://localhost%s", addr)
-	return http.ListenAndServe(addr, nil)
+	return http.ListenAndServe(addr, mux)
 }

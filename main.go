@@ -28,12 +28,13 @@ func main() {
 		log.Fatal(err)
 	}
 	if dev {
-		go server.Watch(cfg.Src, cfg.PollingTimeout, func() error {
+		srv := server.New()
+		go srv.Watch(cfg.Src, cfg.PollingTimeout, func() error {
 			return builder.Build(cfg, true)
 		})
 
 		// dev server
-		if err := server.Serve(cfg.Port, cfg.Dist); err != nil {
+		if err := srv.Serve(cfg.Port, cfg.Dist); err != nil {
 			log.Fatal(err)
 		}
 	}
