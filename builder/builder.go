@@ -267,7 +267,12 @@ func renderInlineMarkdown(s string) template.HTML {
 }
 
 func injectReloadScript(html []byte) []byte {
-	anchorPoint := []byte("</body>")
+	const bodyClose = "</body>"
+	anchorPoint := []byte(bodyClose)
+	if !bytes.Contains(html, anchorPoint) {
+		log.Printf("injectReloadScript: %s not found, script not injected", bodyClose)
+		return html
+	}
 	script := fmt.Appendf([]byte{}, `
 		<script> 
 			new EventSource('%s').onmessage=()=>location.reload();
