@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/adambuczek/go-ssg/config"
@@ -90,7 +91,8 @@ func sseHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func Serve(port string, dist string) error {
+func Serve(portNumber int, dist string) error {
+	port := strconv.Itoa(portNumber)
 	_, err := net.LookupPort("tcp", port)
 	if err != nil {
 		return err

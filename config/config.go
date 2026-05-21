@@ -15,7 +15,7 @@ type Config struct {
 	Layouts        string
 	Assets         string
 	PollingTimeout time.Duration `yaml:"polling_timeout"`
-	Port           string
+	Port           int
 }
 
 const (
@@ -48,8 +48,8 @@ func LoadConfig() (Config, error) {
 	if output.PollingTimeout == 0 {
 		output.PollingTimeout = defaultPollingTimeout
 	}
-	if output.Port == "" {
-		output.Port = "8080"
+	if output.Port == 0 {
+		output.Port = 8080
 	}
 	return output, nil
 }
