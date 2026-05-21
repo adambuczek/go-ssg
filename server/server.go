@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"path/filepath"
 	"time"
@@ -90,6 +91,10 @@ func sseHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func Serve(port string, dist string) error {
+	_, err := net.LookupPort("tcp", port)
+	if err != nil {
+		return err
+	}
 	addr := ":" + port
 	http.Handle("/", http.FileServer(http.Dir(dist)))
 	http.HandleFunc(config.ReloadEndpoint, sseHandler)
