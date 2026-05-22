@@ -97,12 +97,15 @@ func Build(cfg config.Config, dev bool) error {
 			OriginPath: path,
 		}
 
-		page.URL = "/" + strings.TrimPrefix(
-			strings.TrimSuffix(
-				page.OriginPath,
-				".md",
-			),
-			cfg.Src+"/") + "/"
+		page.URL = "/" + filepath.ToSlash(
+			strings.TrimPrefix(
+				strings.TrimSuffix(
+					page.OriginPath,
+					".md",
+				),
+				cfg.Src+"/",
+			)+"/",
+		)
 
 		pages = append(pages, &page)
 	}
