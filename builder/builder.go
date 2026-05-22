@@ -261,7 +261,7 @@ func sortByDateDesc(pages []*Page) []*Page {
 func renderInlineMarkdown(s string) template.HTML {
 	rendered, err := renderMarkdown([]byte(s))
 	if err != nil {
-		log.Printf("problem rendering inline markdown: %s", err)
+		panic(fmt.Sprintf("problem rendering inline markdown: %s", err))
 	}
 	return template.HTML(string(rendered))
 }
