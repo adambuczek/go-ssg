@@ -4,6 +4,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -36,6 +37,7 @@ func LoadConfig() (Config, error) {
 	if output.Src == "" {
 		return Config{}, fmt.Errorf("config: %q is required", "src")
 	}
+	output.Src = filepath.Clean(output.Src)
 	if output.Dist == "" {
 		return Config{}, fmt.Errorf("config: %q is required", "dist")
 	}
