@@ -63,11 +63,25 @@ func TestSplitMeta(t *testing.T) {
 			wantErr:     true,
 		},
 		{
-			name:        "frontmatter not closed correctly",
+			name:        "frontmatter not closed correctly: no close line",
 			input:       []byte("---\ntitle: title\n\ncontent"),
 			wantMeta:    nil,
 			wantContent: []byte("---\ntitle: title\n\ncontent"),
 			wantErr:     true,
+		},
+		{
+			name:        "frontmatter not closed correctly: close line with content",
+			input:       []byte("---\ntitle: title\n---content"),
+			wantMeta:    nil,
+			wantContent: []byte("---\ntitle: title\n---content"),
+			wantErr:     true,
+		},
+		{
+			name:        "frontmatter not closed correctly: close line not in new line",
+			input:       []byte("---\ntitle: title---\ncontent"),
+			wantMeta:    []byte("title: title"),
+			wantContent: []byte("content"),
+			wantErr:     false,
 		},
 	}
 
