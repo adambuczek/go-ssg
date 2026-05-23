@@ -157,8 +157,8 @@ func splitMeta(file []byte) ([]byte, []byte, error) {
 	if !bytes.HasPrefix(file, prefix) {
 		return nil, file, fmt.Errorf("file does not start with front matter")
 	}
-	file = bytes.TrimPrefix(file, prefix)
-	meta, content, found := bytes.Cut(file, prefix)
+	trimmed := bytes.TrimPrefix(file, prefix)
+	meta, content, found := bytes.Cut(trimmed, prefix)
 	if !found {
 		return nil, file, fmt.Errorf("front matter is not closed")
 	}
